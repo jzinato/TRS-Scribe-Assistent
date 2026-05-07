@@ -15,6 +15,16 @@ try:
 except Exception:
     docx = None
 
+try:
+    import pdfplumber
+except Exception:
+    pdfplumber = None
+
+try:
+    import pytesseract
+except Exception:
+    pytesseract = None
+
 EXAM_SYNONYMS = {
     "hemoglobina": ["hb", "hgb", "hemoglobina"],
     "hematocrito": ["ht", "hct", "hematocrito", "hematócrito"],
@@ -388,6 +398,43 @@ def add_basic_pendencies(case_data: ClinicalCase) -> None:
         if key not in exams:
             pending.append({"tipo": "exame_ausente", "descricao": f"Exame nao localizado: {key}"})
     case_data.pendencias = pending
+
+
+def _pdf_text_via_pdfplumber(pdf_bytes: bytes) -> str:
+    if pdfplumber is None:
+        return ""
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            pages = [page.extract_text() or "" for page in pdf.pages]
+        return "\n".join(pages).strip()
+    except Exception:
+        return ""
+
+
+def _pdf_text_via_ocr(pdf_bytes: bytes) -> str:
+    if pdfplumber is None or pytesseract is None:
+        return ""
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            pages = []
+            for page in pdf.pages:
+                img = page.to_image(resolution=200).original
+                try:
+                    text = pytesseract.image_to_string(img, lang="por+eng")
+                except Exception:
+                    text = pytesseract.image_to_string(img)
+                pages.append(text)
+        return "\n".join(pages).strip()
+    except Exception:
+        return ""
+
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Try pdfplumber first; fall back to pytesseract OCR for scanned PDFs."""
+    text = _pdf_text_via_pdfplumber(pdf_bytes)
+    if not text:
+        text = _pdf_text_via_ocr(pdf_bytes)
+    return text
 
 
 def export_docx(short_note: str, detailed_note: str, audit: Dict[str, Any]) -> Optional[bytes]:
