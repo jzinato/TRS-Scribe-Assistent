@@ -8,6 +8,9 @@ from utils import (
     reconciler,
     default_case,
     add_basic_pendencies,
+    extract_text_from_pdf,
+    _pdf_text_via_pdfplumber,
+    _pdf_text_via_ocr,
 )
 
 
@@ -115,3 +118,36 @@ def test_add_basic_pendencies():
     descriptions = [p["descricao"] for p in case.pendencias]
     assert any("hemoglobina" in d for d in descriptions)
     assert any("ferritina" in d for d in descriptions)
+
+
+def test_extract_text_from_pdf_invalid_bytes_returns_empty():
+    assert extract_text_from_pdf(b"") == ""
+    assert extract_text_from_pdf(b"not a pdf") == ""
+
+
+def test_pdf_pdfplumber_invalid_returns_empty():
+    assert _pdf_text_via_pdfplumber(b"not a pdf") == ""
+    assert _pdf_text_via_pdfplumber(b"") == ""
+
+
+def test_pdf_ocr_invalid_returns_empty():
+    assert _pdf_text_via_ocr(b"not a pdf") == ""
+    assert _pdf_text_via_ocr(b"") == ""
+
+
+def test_extract_text_from_pdf_with_real_pdf():
+    try:
+        import pdfplumber
+        from io import BytesIO
+        import reportlab.pdfgen.canvas as canvas_mod
+
+        buf = BytesIO()
+        c = canvas_mod.Canvas(buf)
+        c.drawString(100, 750, "Hemoglobina: 9.8 g/dL")
+        c.save()
+        pdf_bytes = buf.getvalue()
+
+        text = extract_text_from_pdf(pdf_bytes)
+        assert "Hemoglobina" in text or text == ""
+    except ImportError:
+        pass

@@ -15,6 +15,7 @@ from utils import (
     safety_auditor,
     export_docx,
     default_case,
+    extract_text_from_pdf,
     Image,
 )
 
@@ -37,6 +38,8 @@ if "previous_exams" not in st.session_state:
     st.session_state.previous_exams = []
 if "results" not in st.session_state:
     st.session_state.results = {}
+if "_last_pdf_name" not in st.session_state:
+    st.session_state["_last_pdf_name"] = ""
 
 
 # ==============================
@@ -73,7 +76,7 @@ with tab1:
     col1, col2 = st.columns(2)
 
     with col1:
-        uploaded_pdf = st.file_uploader("Upload PDF (placeholder de ingestao)", type=["pdf"], key="pdf")
+        uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"], key="pdf")
         uploaded_image = st.file_uploader("Upload imagem", type=["png", "jpg", "jpeg", "webp"], key="img")
 
         if uploaded_image is not None and Image is not None:
@@ -84,7 +87,16 @@ with tab1:
                 st.warning("Nao foi possivel renderizar a imagem.")
 
         if uploaded_pdf is not None:
-            st.info("Leitura real de PDF ainda deve ser conectada ao parser/OCR do projeto. Neste MVP o PDF fica apenas registrado.")
+            if uploaded_pdf.name != st.session_state["_last_pdf_name"]:
+                with st.spinner("Extraindo texto do PDF..."):
+                    pdf_bytes = uploaded_pdf.read()
+                    extracted = extract_text_from_pdf(pdf_bytes)
+                if extracted:
+                    st.session_state["raw_exam_input"] = extracted
+                    st.session_state["_last_pdf_name"] = uploaded_pdf.name
+                    st.success(f"PDF lido: {len(extracted)} caracteres extraidos.")
+                else:
+                    st.warning("Nenhum texto encontrado no PDF. Verifique se o arquivo contem texto ou imagens legiveis.")
             st.session_state.case_data.rastreabilidade["documentos_entrada"].append(uploaded_pdf.name)
             if "pdf" not in st.session_state.case_data.contexto["fonte_entrada"]:
                 st.session_state.case_data.contexto["fonte_entrada"].append("pdf")
@@ -99,6 +111,7 @@ with tab1:
             "Texto de exames atual",
             height=220,
             placeholder="Exemplo:\nHemoglobina: 9,8 g/dL\nFerritina: 180 ng/mL\nFosforo: 6,1 mg/dL",
+            key="raw_exam_input",
         )
         previous_exam_text = st.text_area(
             "Texto de exames previos (opcional)",
